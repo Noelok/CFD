@@ -1,7 +1,7 @@
 __pycache__/
-*.exe
-*.dll
+//*.exe
+//*.dll
 *.obj
-*.lib
+//*.lib
 *.exp
 .vscode/
