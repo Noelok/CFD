@@ -24,24 +24,27 @@ class Visualizer3D(QWidget):
             self.layout.addWidget(QLabel("Error: VisPy not installed."))
             return
 
+        # 1. Main Canvas
         self.canvas = vispy.scene.SceneCanvas(keys='interactive', bgcolor='#111111')
         self.layout.addWidget(self.canvas.native)
         
+        # 2. Main View
         self.view = self.canvas.central_widget.add_view()
         self.view.camera = 'turntable'
         self.view.camera.fov = 45
         self.view.camera.distance = 600
         
+        # 3. Scene Nodes
         self.object_node = vispy.scene.Node(parent=self.view.scene)
         self.object_node.transform = transforms.STTransform(scale=(1, 1, -1))
         
         self.mesh_vis = None
         self.wire_vis = None
         
-        # --- RETINA DISPLAY FIX ---
-        # Changed width from 1.5 to 4.0 so lines are visible on high-DPI screens
+        # Lines for particles/streamlines
         self.lines_vis = visuals.Line(parent=self.object_node, width=4.0, antialias=True)
         
+        # Grid
         self.grid = visuals.GridLines(color=(0.3, 0.3, 0.3, 0.5), parent=self.view.scene)
         self.grid.transform = transforms.STTransform(scale=(1, 1, -1)) 
 
@@ -49,14 +52,12 @@ class Visualizer3D(QWidget):
         if self.mesh_vis: self.mesh_vis.parent = None
         if self.wire_vis: self.wire_vis.parent = None
         
-        # Opaque Grey Mesh
         self.mesh_vis = visuals.Mesh(
             vertices=vertices, faces=faces,
-            color=(0.7, 0.7, 0.7, 1.0), # Solid Grey
+            color=(0.7, 0.7, 0.7, 1.0), 
             shading='smooth',
             parent=self.object_node 
         )
-        # White Wireframe
         self.wire_vis = visuals.Mesh(
             vertices=vertices, faces=faces,
             color=(1.0, 1.0, 1.0, 0.1), 
@@ -70,16 +71,12 @@ class Visualizer3D(QWidget):
 
     def update_streamlines(self, positions, colors, num_lines, steps_per_line):
         if positions is None: return
-        
         total_points = num_lines * steps_per_line
         idx = np.arange(total_points, dtype=np.uint32)
         grid = idx.reshape(num_lines, steps_per_line)
-        
         starts = grid[:, :-1].flatten()
         ends = grid[:, 1:].flatten()
-        
         connect = np.stack((starts, ends), axis=1)
-        
         self.lines_vis.set_data(pos=positions, color=colors, connect=connect)
 
     def set_mesh_visibility(self, visible):
