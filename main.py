@@ -406,6 +406,11 @@ class WindTunnelApp(QMainWindow):
         self.view_tabs.addTab(self.vis, "📐 Mesh Preview")
         self.sim_runner = EmbeddedFluidX3D(FLUIDX3D_EXE)
         self.view_tabs.addTab(self.sim_runner, "🌊 FluidX3D Simulation")
+
+        # New Results Tab
+        self.results_viewer = visualizer.ResultsViewer()
+        self.view_tabs.addTab(self.results_viewer, "📊 Results")
+
         l3d.addWidget(self.view_tabs)
         splitter.addWidget(container_3d)
         
@@ -417,6 +422,14 @@ class WindTunnelApp(QMainWindow):
         self.controls_stack.addWidget(self.page_design)
         self.page_sim = QWidget(); self.setup_sim_ui(self.page_sim)
         self.controls_stack.addWidget(self.page_sim)
+
+        # Empty page for Results tab
+        self.page_results = QWidget()
+        layout_res = QVBoxLayout(self.page_results)
+        layout_res.addWidget(QLabel("Use the controls in the Results tab to load and view data."))
+        layout_res.addStretch()
+        self.controls_stack.addWidget(self.page_results)
+
         splitter.addWidget(self.controls_stack)
         splitter.setSizes([1100, 500])
         self.view_tabs.currentChanged.connect(self.on_tab_changed)
@@ -427,6 +440,10 @@ class WindTunnelApp(QMainWindow):
         self.key_timer.start(100)
 
     def poll_keys(self):
+        # Only poll if Simulation tab is active
+        if self.view_tabs.currentWidget() != self.sim_runner:
+            return
+
         keys_to_check = {
             0x50: 'P', 0x48: 'H',
             0x31: '1', 0x32: '2', 0x33: '3', 0x34: '4',
@@ -441,6 +458,24 @@ class WindTunnelApp(QMainWindow):
         if key in self.status_widgets:
             w = self.status_widgets[key]
             w['state'] = not w['state'] 
+            txt = w['t1'] if w['state'] else w['t0']
+            color = "#00FF00" if w['state'] else "#AAA"
+            w['lbl'].setText(f"<span style='color:{color}'>{txt}</span>")
+
+    def reset_status_ui(self):
+        # Reset all status widgets to default (False) or specific defaults
+        # Defaults based on TEMPLATE_SETUP:
+        # VIS_Q_CRITERION (4) is Active.
+        # Others mostly Inactive.
+
+        defaults = {
+            'P': False, 'H': False, '1': False, '2': False, '3': False,
+            '4': True,  '5': False, '6': False, '7': False,
+            'T': False, 'Z': False
+        }
+
+        for key, w in self.status_widgets.items():
+            w['state'] = defaults.get(key, False)
             txt = w['t1'] if w['state'] else w['t0']
             color = "#00FF00" if w['state'] else "#AAA"
             w['lbl'].setText(f"<span style='color:{color}'>{txt}</span>")
@@ -515,6 +550,7 @@ class WindTunnelApp(QMainWindow):
         l_grid = QVBoxLayout(g_grid)
         h_vram = QHBoxLayout()
         self.sb_vram = QSpinBox(); self.sb_vram.setRange(500, 24000); self.sb_vram.setValue(2000); self.sb_vram.setSingleStep(500)
+        self.sb_vram.valueChanged.connect(self.update_domain_preview)
         h_vram.addWidget(QLabel("VRAM (MB):")); h_vram.addWidget(self.sb_vram)
         l_grid.addLayout(h_vram)
         h_asp = QHBoxLayout()
@@ -522,6 +558,11 @@ class WindTunnelApp(QMainWindow):
         self.sb_ax = QDoubleSpinBox(); self.sb_ax.setRange(0.1, 10.0); self.sb_ax.setValue(2.0); self.sb_ax.setSingleStep(0.1)
         self.sb_ay = QDoubleSpinBox(); self.sb_ay.setRange(0.1, 10.0); self.sb_ay.setValue(1.0); self.sb_ay.setSingleStep(0.1)
         self.sb_az = QDoubleSpinBox(); self.sb_az.setRange(0.1, 10.0); self.sb_az.setValue(1.0); self.sb_az.setSingleStep(0.1)
+
+        self.sb_ax.valueChanged.connect(self.update_domain_preview)
+        self.sb_ay.valueChanged.connect(self.update_domain_preview)
+        self.sb_az.valueChanged.connect(self.update_domain_preview)
+
         h_asp.addWidget(self.sb_ax); h_asp.addWidget(self.sb_ay); h_asp.addWidget(self.sb_az)
         l_grid.addLayout(h_asp)
         layout.addWidget(g_grid)
@@ -530,6 +571,7 @@ class WindTunnelApp(QMainWindow):
         l_geo = QVBoxLayout(g_geo)
         h_scale = QHBoxLayout()
         self.sb_scale = QDoubleSpinBox(); self.sb_scale.setRange(0.1, 5.0); self.sb_scale.setValue(0.50); self.sb_scale.setSingleStep(0.05)
+        self.sb_scale.valueChanged.connect(self.update_domain_preview)
         h_scale.addWidget(QLabel("Mesh Scale:")); h_scale.addWidget(self.sb_scale)
         l_geo.addLayout(h_scale)
         
@@ -538,6 +580,11 @@ class WindTunnelApp(QMainWindow):
         self.sb_off_x = QDoubleSpinBox(); self.sb_off_x.setRange(-1.0, 1.0); self.sb_off_x.setValue(-0.25); self.sb_off_x.setSingleStep(0.05)
         self.sb_off_y = QDoubleSpinBox(); self.sb_off_y.setRange(-1.0, 1.0); self.sb_off_y.setValue(0.0); self.sb_off_y.setSingleStep(0.05)
         self.sb_off_z = QDoubleSpinBox(); self.sb_off_z.setRange(-1.0, 1.0); self.sb_off_z.setValue(0.0); self.sb_off_z.setSingleStep(0.05)
+
+        self.sb_off_x.valueChanged.connect(self.update_domain_preview)
+        self.sb_off_y.valueChanged.connect(self.update_domain_preview)
+        self.sb_off_z.valueChanged.connect(self.update_domain_preview)
+
         h_off.addWidget(self.sb_off_x); h_off.addWidget(self.sb_off_y); h_off.addWidget(self.sb_off_z)
         l_geo.addLayout(h_off)
         
@@ -546,6 +593,11 @@ class WindTunnelApp(QMainWindow):
         self.sb_rot_x = QDoubleSpinBox(); self.sb_rot_x.setRange(-360, 360); self.sb_rot_x.setValue(0.0); 
         self.sb_rot_y = QDoubleSpinBox(); self.sb_rot_y.setRange(-360, 360); self.sb_rot_y.setValue(0.0); 
         self.sb_rot_z = QDoubleSpinBox(); self.sb_rot_z.setRange(-360, 360); self.sb_rot_z.setValue(0.0); 
+
+        self.sb_rot_x.valueChanged.connect(self.update_domain_preview)
+        self.sb_rot_y.valueChanged.connect(self.update_domain_preview)
+        self.sb_rot_z.valueChanged.connect(self.update_domain_preview)
+
         h_rot.addWidget(self.sb_rot_x); h_rot.addWidget(self.sb_rot_y); h_rot.addWidget(self.sb_rot_z)
         l_geo.addLayout(h_rot)
         layout.addWidget(g_geo)
@@ -565,11 +617,17 @@ class WindTunnelApp(QMainWindow):
         l_phys.addWidget(self.chk_vol_force)
         l_phys.addWidget(self.chk_particles)
         
-        # EXPORT CHECKBOX
+        # EXPORT & RESULTS CONTROLS
         self.chk_export = QCheckBox("Export Simulation Data (VTK)")
         self.chk_export.setChecked(False)
         l_phys.addWidget(self.chk_export)
         
+        h_data = QHBoxLayout()
+        self.btn_open_data = QPushButton("📂 Data")
+        self.btn_open_data.clicked.connect(self.open_data_folder)
+        h_data.addWidget(self.btn_open_data)
+        l_phys.addLayout(h_data)
+
         layout.addWidget(g_phys)
 
         # --- SHORTCUTS & STATUS ---
@@ -600,7 +658,7 @@ class WindTunnelApp(QMainWindow):
             l_help.addWidget(stat_lbl, i, 2)
             self.status_widgets[key] = {
                 'lbl': stat_lbl, 
-                'state': False, # False = Default
+                'state': False, # Will be reset
                 't0': def_stat, 
                 't1': act_stat
             }
@@ -618,7 +676,7 @@ class WindTunnelApp(QMainWindow):
 
     def keyPressEvent(self, event):
         key = event.text().upper()
-        if key in self.status_widgets:
+        if key in self.status_widgets and self.view_tabs.currentWidget() == self.sim_runner:
             self.update_status_ui(key)
         super().keyPressEvent(event)
 
@@ -673,6 +731,77 @@ class WindTunnelApp(QMainWindow):
         self.btn_save_svg.setEnabled(True)
         self.btn_export_mesh.setEnabled(True)
         self.btn_build_run.setEnabled(True)
+        self.update_domain_preview()
+
+    def update_domain_preview(self):
+        if not self.mesh_data: return
+
+        # Calculate Domain Box in Mesh Space
+        # Logic:
+        # C++ Setup: size = scale * N.x
+        # So N.x = size / scale.
+        # But here we have mesh 'size' (let's say MaxDim).
+        # We need to visualize the box of size (Nx, Ny, Nz) * (size / N.x)
+        # Wait. Physical size of domain in simulation units is N * dx.
+        # The mesh is voxelized into this domain.
+        # If 'scale' = 0.5, it means MeshMaxDim = 0.5 * DomainWidthX.
+        # So DomainWidthX = MeshMaxDim / 0.5.
+
+        scale = self.sb_scale.value()
+        if scale <= 0.01: return
+
+        mesh_bounds = self.mesh_data.bounds
+        mesh_dims = mesh_bounds[1] - mesh_bounds[0]
+        mesh_max_dim = np.max(mesh_dims) # This corresponds to 'size' in C++ voxelization usually
+
+        domain_width_x = mesh_max_dim / scale
+
+        # Aspect Ratio
+        ax, ay, az = self.sb_ax.value(), self.sb_ay.value(), self.sb_az.value()
+
+        # Domain Dimensions in World/Mesh Space
+        # domain_width_x is proportional to ax
+        # So unit_dim = domain_width_x / ax
+        unit_dim = domain_width_x / ax
+
+        d_x = unit_dim * ax
+        d_y = unit_dim * ay
+        d_z = unit_dim * az
+
+        # Center Calculation
+        # C++: center = lbm.center() + offset * N
+        # lbm.center() is (Nx/2, Ny/2, Nz/2)
+        # Mesh is placed at 'center'.
+        # If Mesh is at (0,0,0) in our viewer.
+        # Then Domain Center relative to Mesh is -(Offset * N).
+        # In World units: -(Offset * DomainDim)
+
+        off_x = self.sb_off_x.value()
+        off_y = self.sb_off_y.value()
+        off_z = self.sb_off_z.value()
+
+        # Note: In C++, offset is relative to N (0..1 usually? No, it's * N).
+        # "off_x * lbm_N.x"
+        # So offset vector in World Units = (off_x * d_x, off_y * d_y, ...)
+        # Wait, C++ uses lbm_N.x/y/z.
+        # d_x corresponds to lbm_N.x * dx_sim.
+        # So yes, WorldOffset = (off_x * d_x, off_y * d_y, off_z * d_z)
+
+        # But wait, we need to be careful with coordinate systems.
+        # If Mesh is at World(0,0,0).
+        # And Domain Center is at C_d.
+        # Mesh Center relative to Domain is M_rel = M - C_d = -C_d.
+        # In C++, Mesh is placed at DomainCenter + Offset.
+        # So M_rel = Offset.
+        # So -C_d = Offset => C_d = -Offset.
+        # So Domain Center = -1 * (OffsetVector * DomainDimensions)
+
+        c_x = -off_x * d_x
+        c_y = -off_y * d_y
+        c_z = -off_z * d_z
+
+        self.vis.draw_domain_box(d_x, d_y, d_z, (c_x, c_y, c_z))
+
 
     def on_build_and_run(self):
         if self.sim_runner.process:
@@ -684,6 +813,9 @@ class WindTunnelApp(QMainWindow):
 
         if not self.mesh_data: return
         
+        # Reset Status UI
+        self.reset_status_ui()
+
         sim_mesh = self.mesh_data.copy()
         
         rot_x = np.radians(self.sb_rot_x.value())
@@ -752,6 +884,16 @@ class WindTunnelApp(QMainWindow):
     def export_mesh_user(self):
         path, _ = QFileDialog.getSaveFileName(self, "Export", "mesh.stl", "STL (*.stl);;OBJ (*.obj)")
         if path: self.mesh_data.export(path)
+
+    def open_data_folder(self):
+        path = os.path.join(FLUIDX3D_ROOT, "bin", "data")
+        if not os.path.exists(path):
+            try: os.makedirs(path)
+            except: pass
+        if os.path.exists(path):
+            os.startfile(path)
+        else:
+            QMessageBox.information(self, "Info", f"Data folder not found at:\n{path}")
 
     def on_tab_changed(self, index):
         self.controls_stack.setCurrentIndex(index)
