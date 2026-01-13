@@ -158,7 +158,7 @@ void main_setup() {{
     LBM lbm(lbm_N, lbm_nu, 0.0f, 0.0f, {force_z}f);
 
     // Mesh Scaling and Positioning
-    const float size = {scale}f * (float)lbm_N.x; 
+    const float size = {scale}f * (float)lbm.smallest_side_length(); 
     const float3 center = lbm.center() + float3(
         {off_x}f * (float)lbm_N.x, 
         {off_y}f * (float)lbm_N.y, 
@@ -248,9 +248,14 @@ class FluidX3DCompiler:
         export_code = ""
         if params['export_data']:
             export_code = """
-            if (lbm.graphics.frame % 100 == 0) {
-                lbm.write_data(get_exe_path() + "data/");
+            static int export_frame_counter = 0;
+            if (export_frame_counter % 100 == 0) {
+                const string data_path = get_exe_path() + "data/";
+                lbm.rho.write_device_to_vtk(data_path);
+                lbm.u.write_device_to_vtk(data_path);
+                lbm.flags.write_device_to_vtk(data_path);
             }
+            export_frame_counter++;
             """
         
         setup_content = TEMPLATE_SETUP.format(

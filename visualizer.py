@@ -1,5 +1,5 @@
 import numpy as np
-from PyQt5.QtWidgets import QWidget, QVBoxLayout, QLabel
+from PyQt5.QtWidgets import QWidget, QVBoxLayout, QLabel, QPushButton, QHBoxLayout, QFileDialog
 import matplotlib
 matplotlib.use('Agg')
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
@@ -13,6 +13,13 @@ try:
     VISPY_AVAILABLE = True
 except ImportError:
     VISPY_AVAILABLE = False
+
+try:
+    import pyvista as pv
+    from pyvistaqt import QtInteractor
+    PYVISTA_AVAILABLE = True
+except ImportError:
+    PYVISTA_AVAILABLE = False
 
 class Visualizer3D(QWidget):
     def __init__(self, parent=None):
@@ -44,6 +51,9 @@ class Visualizer3D(QWidget):
         # Lines for particles/streamlines
         self.lines_vis = visuals.Line(parent=self.object_node, width=4.0, antialias=True)
         
+        # Domain Box
+        self.domain_box = None
+
         # Grid
         self.grid = visuals.GridLines(color=(0.3, 0.3, 0.3, 0.5), parent=self.view.scene)
         self.grid.transform = transforms.STTransform(scale=(1, 1, -1)) 
@@ -86,6 +96,28 @@ class Visualizer3D(QWidget):
     def set_particles_visibility(self, visible):
         self.lines_vis.visible = visible
 
+    def draw_domain_box(self, width, height, depth, center):
+        """Draws a wireframe box representing the simulation domain."""
+        if self.domain_box:
+            self.domain_box.parent = None
+            self.domain_box = None
+
+        # Box expects center to be (0,0,0) relative to its transform usually, or width/height/depth
+        # VisPy Box visual is centered.
+        self.domain_box = visuals.Box(width=width, height=height, depth=depth, 
+                                      color=(0, 1, 0, 0.5), edge_color='green',
+                                      parent=self.view.scene) # Add directly to scene to avoid object_node transform if needed? 
+                                      # Wait, object_node scales (1,1,-1). 
+                                      # We want the domain to be in the same space as the mesh.
+        
+        # If we parent to object_node, it inherits (1,1,-1).
+        self.domain_box.parent = self.object_node
+        
+        # Apply translation to center
+        # visual.Box centers at (0,0,0) by default. We need to move it to 'center'.
+        self.domain_box.transform = transforms.STTransform(translate=center)
+
+
 class PreviewCanvas(FigureCanvas):
     def __init__(self, parent=None):
         self.fig = Figure(figsize=(4, 4), dpi=100)
@@ -110,3 +142,42 @@ class PreviewCanvas(FigureCanvas):
         self.ax.set_aspect('equal')
         self.ax.set_title(title, color='white' if invert else 'black')
         self.draw()
+
+class ResultsViewer(QWidget):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.layout = QVBoxLayout(self)
+        
+        if not PYVISTA_AVAILABLE:
+            self.layout.addWidget(QLabel("Error: PyVista not installed."))
+            return
+
+        # Top Bar
+        h_bar = QHBoxLayout()
+        self.btn_load = QPushButton("📂 Load VTK/VTI File")
+        self.btn_load.clicked.connect(self.load_file)
+        h_bar.addWidget(self.btn_load)
+        self.lbl_info = QLabel("No file loaded.")
+        h_bar.addWidget(self.lbl_info)
+        self.layout.addLayout(h_bar)
+
+        # PyVista Plotter
+        self.plotter = QtInteractor(self)
+        self.layout.addWidget(self.plotter.interactor)
+        self.plotter.add_axes()
+        self.plotter.set_background("#2b2b2b")
+
+    def load_file(self):
+        path, _ = QFileDialog.getOpenFileName(self, "Load Result", "", "VTK Files (*.vtk *.vti *.vtu *.ply *.stl)")
+        if path:
+            self.show_data(path)
+
+    def show_data(self, path):
+        try:
+            self.plotter.clear()
+            mesh = pv.read(path)
+            self.plotter.add_mesh(mesh, show_edges=False, cmap="jet")
+            self.plotter.reset_camera()
+            self.lbl_info.setText(f"Loaded: {path.split('/')[-1]}")
+        except Exception as e:
+            self.lbl_info.setText(f"Error: {str(e)}")
