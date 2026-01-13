@@ -549,6 +549,16 @@ class WindTunnelApp(QMainWindow):
         h_rot.addWidget(self.sb_rot_x); h_rot.addWidget(self.sb_rot_y); h_rot.addWidget(self.sb_rot_z)
         l_geo.addLayout(h_rot)
         layout.addWidget(g_geo)
+
+        # Connect signals for live preview
+        for sb in [self.sb_ax, self.sb_ay, self.sb_az,
+                   self.sb_scale,
+                   self.sb_off_x, self.sb_off_y, self.sb_off_z,
+                   self.sb_rot_x, self.sb_rot_y, self.sb_rot_z]:
+            sb.valueChanged.connect(self.update_preview)
+
+        # Initial update
+        self.update_preview()
         
         g_phys = QGroupBox("3. Physics")
         l_phys = QVBoxLayout(g_phys)
@@ -670,9 +680,22 @@ class WindTunnelApp(QMainWindow):
         center_offset = (min_bound + max_bound) / 2.0
         mesh.apply_translation(-center_offset)
         self.vis.set_mesh(mesh.vertices, mesh.faces)
+        # Ensure preview config is applied (in case set_mesh reset it or needs it)
+        self.update_preview()
+
         self.btn_save_svg.setEnabled(True)
         self.btn_export_mesh.setEnabled(True)
         self.btn_build_run.setEnabled(True)
+
+    def update_preview(self):
+        try:
+            aspect = (self.sb_ax.value(), self.sb_ay.value(), self.sb_az.value())
+            scale = self.sb_scale.value()
+            offset = (self.sb_off_x.value(), self.sb_off_y.value(), self.sb_off_z.value())
+            rot = (self.sb_rot_x.value(), self.sb_rot_y.value(), self.sb_rot_z.value())
+            self.vis.update_config(aspect, scale, offset, rot)
+        except Exception as e:
+            print(f"Preview Error: {e}")
 
     def on_build_and_run(self):
         if self.sim_runner.process:
