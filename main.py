@@ -30,7 +30,6 @@ import visualizer
 CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
 
 POSSIBLE_PATHS = [
-    r"D:\projects\FluidX3D-master",
     os.path.join(CURRENT_DIR, "FluidX3D-master"),
     os.path.join(CURRENT_DIR, "..", "FluidX3D-master"),
     CURRENT_DIR
@@ -43,8 +42,7 @@ for p in POSSIBLE_PATHS:
         break
 
 if not FLUIDX3D_ROOT:
-    FLUIDX3D_ROOT = r"D:\projects\FluidX3D-master" 
-    print(f"⚠️ Could not detect FluidX3D. Defaulting to: {FLUIDX3D_ROOT}")
+    print(f"⚠️ Could not detect FluidX3D in: {POSSIBLE_PATHS}")
 else:
     print(f"✅ FluidX3D detected at: {FLUIDX3D_ROOT}")
 
