@@ -113,6 +113,11 @@ class FluidX3DSolver:
         self.vx = np.ascontiguousarray(np.zeros(self.cells, dtype=np.float32))
         self.vy = np.ascontiguousarray(np.zeros(self.cells, dtype=np.float32))
         self.vz = np.ascontiguousarray(np.zeros(self.cells, dtype=np.float32))
+
+        # Pre-allocate the CPU-side array for stacking velocities before GPU transfer.
+        # Using Fortran order ('F') is crucial because it allows us to reshape
+        # views of the velocity components without creating copies.
+        self.cpu_staging_grid = np.zeros((self.resolution, self.resolution, self.resolution, 3), dtype=np.float32, order='F')
         
         # Warp GPU Buffers
         self.device = WP_DEVICE
@@ -131,12 +136,16 @@ class FluidX3DSolver:
         self.lib.fluid_get_velocity(self.vx, self.vy, self.vz)
         
         # C. Upload to Warp (CPU -> GPU)
-        # Stack and reshape to 3D grid
-        # FluidX3D layout: x + y*Nx + z*Nx*Ny. This matches numpy 'F' (Fortran) order reshape usually
-        flat = np.stack((self.vx, self.vy, self.vz), axis=1)
-        grid = flat.reshape((self.resolution, self.resolution, self.resolution, 3), order='F')
+        # Reuse the pre-allocated staging grid to avoid new allocations.
+        # The reshape operation on each component should return a view, not a copy,
+        # as the underlying data is contiguous and the layout matches.
+        self.cpu_staging_grid[:, :, :, 0] = self.vx.reshape((self.resolution, self.resolution, self.resolution), order='F')
+        self.cpu_staging_grid[:, :, :, 1] = self.vy.reshape((self.resolution, self.resolution, self.resolution), order='F')
+        self.cpu_staging_grid[:, :, :, 2] = self.vz.reshape((self.resolution, self.resolution, self.resolution), order='F')
         
-        wp.copy(self.wp_field, wp.array(grid, dtype=wp.vec3, device=self.device))
+        # Copy the assembled grid to the GPU. This still involves a copy, but
+        # we have avoided the expensive numpy stacking and reshaping allocations.
+        wp.copy(self.wp_field, wp.array(self.cpu_staging_grid, dtype=wp.vec3, device=self.device))
         
         # D. Trace Streamlines (Warp GPU)
         # Emitter: Start at bottom of grid (Z=10)
