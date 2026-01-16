@@ -1,0 +1,9 @@
+PyQt5
+pyvista
+pyvistaqt
+vispy
+numpy
+shapely
+trimesh
+matplotlib
+pywin32

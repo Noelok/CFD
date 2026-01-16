@@ -110,9 +110,12 @@ class FluidX3DSolver:
         
         # --- 4. Prepare Memory ---
         # CPU Buffers for transfer
-        self.vx = np.ascontiguousarray(np.zeros(self.cells, dtype=np.float32))
-        self.vy = np.ascontiguousarray(np.zeros(self.cells, dtype=np.float32))
-        self.vz = np.ascontiguousarray(np.zeros(self.cells, dtype=np.float32))
+        self.vx = np.zeros(self.cells, dtype=np.float32)
+        self.vy = np.zeros(self.cells, dtype=np.float32)
+        self.vz = np.zeros(self.cells, dtype=np.float32)
+        
+        # Staging buffer to avoid re-allocating the stacked array
+        self.cpu_staging_grid = np.zeros((self.resolution, self.resolution, self.resolution, 3), dtype=np.float32, order='F')
         
         # Warp GPU Buffers
         self.device = WP_DEVICE
@@ -131,12 +134,14 @@ class FluidX3DSolver:
         self.lib.fluid_get_velocity(self.vx, self.vy, self.vz)
         
         # C. Upload to Warp (CPU -> GPU)
-        # Stack and reshape to 3D grid
-        # FluidX3D layout: x + y*Nx + z*Nx*Ny. This matches numpy 'F' (Fortran) order reshape usually
-        flat = np.stack((self.vx, self.vy, self.vz), axis=1)
-        grid = flat.reshape((self.resolution, self.resolution, self.resolution, 3), order='F')
-        
-        wp.copy(self.wp_field, wp.array(grid, dtype=wp.vec3, device=self.device))
+        # This was a huge bottleneck. np.stack creates a new array every frame.
+        # By pre-allocating the correctly shaped 'F' order array, we can
+        # fill it and then reshape the velocity arrays in-place with zero copy.
+        self.cpu_staging_grid[..., 0] = self.vx.reshape((self.resolution, self.resolution, self.resolution), order='F')
+        self.cpu_staging_grid[..., 1] = self.vy.reshape((self.resolution, self.resolution, self.resolution), order='F')
+        self.cpu_staging_grid[..., 2] = self.vz.reshape((self.resolution, self.resolution, self.resolution), order='F')
+
+        wp.copy(self.wp_field, self.cpu_staging_grid)
         
         # D. Trace Streamlines (Warp GPU)
         # Emitter: Start at bottom of grid (Z=10)

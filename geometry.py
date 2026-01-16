@@ -95,6 +95,10 @@ def generate_full_mesh(xy_poly, z_polys, side_length):
     combined = trimesh.util.concatenate(meshes)
     combined.merge_vertices()
     
+    # Ensure correct data types before repair
+    combined.vertices = combined.vertices.astype(np.float64)
+    combined.faces = combined.faces.astype(np.int64)
+
     # --- FLUIDX3D PREP: Repair Mesh ---
     # Ensure normals are consistent and mesh is watertight.
     trimesh.repair.fix_normals(combined)
