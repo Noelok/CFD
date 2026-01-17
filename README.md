@@ -46,3 +46,8 @@ Double-click **`run_app.bat`** to start the application.
 *   `geometry.py`: Geometry generation logic.
 *   `FluidX3D-master/`: C++ Core source code.
 *   `bin/`: Compiled binaries and export data.
+
+## Credits & Attribution
+This project serves as a custom User Interface (UI) for the powerful **FluidX3D** simulation engine.
+*   **Simulation Core**: [FluidX3D](https://github.com/ProjectPhysX/FluidX3D) by Dr. Moritz Lehmann.
+*   **License**: FluidX3D is free for non-commercial use (see `FluidX3D-master/LICENSE`).
